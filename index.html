@@ -225,7 +225,13 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:17px;height:17px;b
       <div class="form-group"><label>Usuario</label><input type="text" id="reg-user" placeholder="mi_usuario" /></div>
       <div class="form-group"><label>Email</label><input type="email" id="reg-email" placeholder="correo@ejemplo.com" /></div>
       <div class="form-group"><label>Confirmar email</label><input type="email" id="reg-email2" placeholder="correo@ejemplo.com" /></div>
-      <div class="form-group"><label>Contraseña</label><input type="password" id="reg-pass" placeholder="Mín. 8 caracteres, 1 mayúscula, 1 número" /></div>
+      <div class="form-group">
+        <label>Contraseña</label>
+        <div style="position:relative">
+          <input type="password" id="reg-pass" placeholder="Mín. 8 caracteres, 1 mayúscula, 1 número" style="padding-right:44px" />
+          <button type="button" onclick="togglePw('reg-pass',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--muted);font-size:1rem;padding:4px">👁</button>
+        </div>
+      </div>
       <div class="form-group"><label>Confirmar contraseña</label><input type="password" id="reg-pass2" placeholder="Repetí la contraseña" /></div>
       <div style="font-size:.74rem;color:var(--muted);margin-bottom:14px;font-family:var(--mono)">Mín. 8 caracteres · 1 mayúscula · 1 número</div>
       <button class="btn btn-primary" onclick="doRegister()">Crear Cuenta</button>
@@ -466,16 +472,23 @@ function clearAlert() { document.getElementById('login-alert').className='alert'
 function setAlert(msg,type){ const el=document.getElementById('login-alert'); el.textContent=msg; el.className=`alert ${type}`; }
 
 function validatePw(pw) {
-  if (pw.length < 8)         return 'Mínimo 8 caracteres';
-  if (!/[A-Z]/.test(pw))     return 'Al menos una letra mayúscula';
-  if (!/[0-9]/.test(pw))     return 'Al menos un número';
+  if (pw.length < 8)         return 'La contraseña debe tener mínimo 8 caracteres';
+  if (!/[A-Z]/.test(pw))     return 'La contraseña debe tener al menos una letra mayúscula';
+  if (!/[0-9]/.test(pw))     return 'La contraseña debe tener al menos un número';
   return null;
+}
+
+function togglePw(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (input.type === 'password') { input.type = 'text'; btn.textContent = '🙈'; }
+  else                           { input.type = 'password'; btn.textContent = '👁'; }
 }
 
 async function doLogin() {
   const u = document.getElementById('login-user').value.trim();
   const p = document.getElementById('login-pass').value;
   if (!u||!p) return setAlert('Completá todos los campos','error');
+  if (!API || API.includes('undefined')) return setAlert('Error de configuración: recargá la página','error');
   try {
     const res  = await fetch(`${API}/user/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
     const data = await res.json();
@@ -484,7 +497,7 @@ async function doLogin() {
     localStorage.setItem('app1_token', token);
     localStorage.setItem('app1_me', JSON.stringify(me));
     showMain();
-  } catch { setAlert('No se puede conectar al backend','error'); }
+  } catch(err) { setAlert('No se puede conectar al backend: ' + err.message,'error'); }
 }
 
 async function doRegister() {
@@ -498,13 +511,14 @@ async function doRegister() {
   const pwErr = validatePw(p);
   if (pwErr)                  return setAlert(pwErr,'error');
   if (p !== p2)               return setAlert('Las contraseñas no coinciden','error');
+  if (!API || API.includes('undefined')) return setAlert('Error de configuración: recargá la página','error');
   try {
     const res  = await fetch(`${API}/user/register`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,email:e,password:p})});
     const data = await res.json();
-    if (!res.ok) return setAlert(data.error,'error');
+    if (!res.ok) return setAlert(data.error || 'Error del servidor','error');
     setAlert('¡Cuenta creada! Ahora iniciá sesión.','success');
     setTimeout(showLogin, 1800);
-  } catch { setAlert('No se puede conectar al backend','error'); }
+  } catch(err) { setAlert('No se puede conectar al backend: ' + err.message,'error'); }
 }
 
 let forgotEmail = '';
