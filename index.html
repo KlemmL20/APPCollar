@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CollarApp — Mi Panel</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0d0d14" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <script src="config.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --bg:#0d0d14;--surface:#13131f;--surface2:#1a1a2e;--border:#2a2a45;
+  --accent:#6c63ff;--accent2:#ff6584;--accent3:#43e97b;
+  --text:#e8e8f0;--muted:#7070a0;
+  --mono:'Space Mono',monospace;--main:'Syne',sans-serif;--radius:12px;
+  --shadow:0 8px 32px rgba(108,99,255,.15);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--main);min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 600px 400px at 10% 20%,rgba(108,99,255,.08),transparent 70%),radial-gradient(ellipse 400px 600px at 90% 80%,rgba(255,101,132,.06),transparent 70%);pointer-events:none;z-index:0}
+#app{position:relative;z-index:1}
+.screen{display:none;min-height:100vh}
+.screen.active{display:flex}
+
+/* LOGIN */
+#screen-login{align-items:center;justify-content:center;padding:24px}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:48px 40px;width:100%;max-width:420px;box-shadow:var(--shadow);animation:slideUp .4s ease}
+@keyframes slideUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+.login-logo{display:flex;align-items:center;gap:14px;margin-bottom:36px}
+.logo-icon{width:52px;height:52px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px}
+.login-logo h1{font-size:1.5rem;font-weight:800;letter-spacing:-.02em}
+.login-logo span{font-size:.78rem;color:var(--muted);font-family:var(--mono);display:block}
+.alert{padding:12px 16px;border-radius:var(--radius);font-family:var(--mono);font-size:.8rem;margin-bottom:16px;display:none}
+.alert.error{background:rgba(255,101,132,.1);border:1px solid rgba(255,101,132,.3);color:var(--accent2);display:block}
+.alert.success{background:rgba(67,233,123,.1);border:1px solid rgba(67,233,123,.3);color:var(--accent3);display:block}
+.login-switch{margin-top:18px;text-align:center;font-size:.85rem;color:var(--muted)}
+.login-switch a{color:var(--accent);cursor:pointer;text-decoration:underline}
+
+/* FORMS */
+.form-group{margin-bottom:18px}
+.form-group label{display:block;font-size:.75rem;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:7px}
+.form-group input,.form-group select,.form-group textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:var(--mono);font-size:.88rem;padding:11px 14px;transition:border-color .2s,box-shadow .2s;outline:none}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(108,99,255,.12)}
+.form-group select option{background:var(--surface2)}
+.form-group textarea{min-height:72px;resize:vertical}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 22px;border-radius:var(--radius);font-family:var(--main);font-weight:700;font-size:.92rem;cursor:pointer;border:none;transition:all .2s}
+.btn-primary{background:linear-gradient(135deg,var(--accent),#8b5cf6);color:#fff;width:100%}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(108,99,255,.35)}
+.btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{border-color:var(--accent)}
+.btn-danger{background:rgba(255,101,132,.12);color:var(--accent2);border:1px solid rgba(255,101,132,.3)}
+.btn-success{background:rgba(67,233,123,.12);color:var(--accent3);border:1px solid rgba(67,233,123,.3)}
+.btn-sm{padding:6px 13px;font-size:.78rem}
+.btn-icon{padding:8px;border-radius:9px}
+
+/* MAIN */
+#screen-main{flex-direction:column}
+.header{background:rgba(19,19,31,.96);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:0 24px;height:64px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.header-logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:1.05rem}
+.header-logo .dot{width:32px;height:32px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px}
+.header-right{display:flex;align-items:center;gap:10px}
+.user-badge{background:var(--surface2);border:1px solid var(--border);border-radius:30px;padding:5px 13px;font-family:var(--mono);font-size:.75rem;color:var(--accent)}
+.master-badge{background:rgba(67,233,123,.1);border:1px solid rgba(67,233,123,.3);border-radius:30px;padding:5px 13px;font-family:var(--mono);font-size:.72rem;color:var(--accent3);display:none}
+.main-content{padding:28px 24px;max-width:960px;margin:0 auto;width:100%}
+
+/* TABS */
+.tabs{display:flex;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:4px;margin-bottom:26px;overflow-x:auto}
+.tab{flex:1;min-width:fit-content;padding:10px 16px;border-radius:10px;border:none;background:transparent;color:var(--muted);font-family:var(--main);font-size:.86rem;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
+.tab.active{background:var(--accent);color:#fff}
+
+/* PAGE HEADER */
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px}
+.page-title{font-size:1.7rem;font-weight:800;letter-spacing:-.03em}
+.page-title span{color:var(--accent)}
+
+/* ACCOUNT CARD */
+.account-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;margin-bottom:20px}
+.account-section{margin-bottom:20px}
+.account-section:last-child{margin-bottom:0}
+.section-label{font-family:var(--mono);font-size:.7rem;color:var(--accent);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px}
+.code-box{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.code-value{font-family:var(--mono);font-size:1.1rem;font-weight:700;letter-spacing:.2em;color:var(--accent)}
+.master-status{display:flex;align-items:center;gap:10px;padding:14px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:10px}
+.master-dot{width:10px;height:10px;border-radius:50%;background:var(--muted);flex-shrink:0}
+.master-dot.linked{background:var(--accent3);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* DEVICE CARDS */
+.device-grid{display:grid;gap:14px}
+.device-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 22px;display:flex;align-items:center;gap:14px;transition:border-color .2s;animation:fadeIn .3s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.device-card:hover{border-color:var(--accent)}
+.device-icon{width:48px;height:48px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.device-icon.collar{background:linear-gradient(135deg,var(--accent),var(--accent2))}
+.device-icon.camara{background:linear-gradient(135deg,#0088ff,#00ccff)}
+.device-info{flex:1;min-width:0}
+.device-name{font-weight:700;font-size:.95rem}
+.device-badge{display:inline-block;font-family:var(--mono);font-size:.65rem;padding:2px 7px;border-radius:20px;margin-bottom:3px}
+.badge-collar{background:rgba(108,99,255,.15);color:var(--accent)}
+.badge-camara{background:rgba(0,136,255,.15);color:#0088ff}
+.device-meta{font-family:var(--mono);font-size:.7rem;color:var(--muted);margin-top:1px}
+.device-actions{display:flex;gap:7px;flex-shrink:0}
+
+/* TYPE SELECTOR */
+.type-selector{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px}
+.type-card{background:var(--surface);border:2px solid var(--border);border-radius:14px;padding:22px;cursor:pointer;transition:all .2s;text-align:center}
+.type-card:hover,.type-card.selected{border-color:var(--accent);background:rgba(108,99,255,.07)}
+.type-icon{font-size:2.2rem;margin-bottom:8px}
+.type-name{font-weight:700;font-size:.95rem;margin-bottom:3px}
+.type-desc{font-size:.75rem;color:var(--muted)}
+
+/* CONFIG FORM */
+.config-form{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:26px;animation:slideUp .3s ease}
+.form-section{margin-bottom:26px}
+.form-section-title{font-family:var(--mono);font-size:.7rem;color:var(--accent);text-transform:uppercase;letter-spacing:.14em;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.form-section-title::after{content:'';flex:1;height:1px;background:var(--border)}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--border)}
+.toggle-row:last-child{border-bottom:none}
+.toggle-label{font-size:.88rem;font-weight:600}
+.toggle-desc{font-size:.76rem;color:var(--muted);margin-top:2px}
+.toggle{position:relative;width:42px;height:23px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.toggle-slider{position:absolute;inset:0;background:var(--border);border-radius:12px;cursor:pointer;transition:background .2s}
+.toggle-slider::before{content:'';position:absolute;width:17px;height:17px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .2s}
+.toggle input:checked+.toggle-slider{background:var(--accent)}
+.toggle input:checked+.toggle-slider::before{transform:translateX(19px)}
+.range-wrapper{display:flex;align-items:center;gap:10px}
+input[type=range]{flex:1;appearance:none;height:4px;background:var(--border);border-radius:2px;outline:none}
+input[type=range]::-webkit-slider-thumb{appearance:none;width:17px;height:17px;background:var(--accent);border-radius:50%;cursor:pointer}
+.range-value{font-family:var(--mono);font-size:.82rem;color:var(--accent);min-width:50px;text-align:right}
+.preview-box{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 14px;margin-top:10px;font-family:var(--mono);font-size:.76rem;color:var(--muted);line-height:2;display:none}
+.cmd-tags{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+.cmd-tag{background:rgba(108,99,255,.12);border:1px solid rgba(108,99,255,.35);color:var(--accent);padding:4px 11px;border-radius:20px;font-family:var(--mono);font-size:.75rem;display:flex;align-items:center;gap:5px}
+.cmd-tag button{background:none;border:none;color:var(--accent2);cursor:pointer;font-size:.95rem;line-height:1;padding:0}
+.cmd-row{display:flex;gap:8px}
+
+/* CONTROL TAB */
+.control-grid{display:grid;gap:14px}
+.control-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.control-header{padding:16px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)}
+.control-icon{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.control-body{padding:18px 20px}
+.cmd-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-bottom:14px}
+.cmd-btn{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:12px 8px;cursor:pointer;color:var(--text);font-family:var(--main);font-weight:600;font-size:.78rem;text-align:center;transition:all .2s;display:flex;flex-direction:column;align-items:center;gap:5px}
+.cmd-btn:hover{border-color:var(--accent);transform:translateY(-1px);box-shadow:0 4px 12px rgba(108,99,255,.2)}
+.cmd-btn:active{transform:translateY(0)}
+.cmd-btn.sent{border-color:var(--accent3);background:rgba(67,233,123,.07)}
+.cmd-btn.cam-btn{border-color:rgba(0,136,255,.3)}
+.cmd-btn.cam-btn:hover{border-color:#0088ff;box-shadow:0 4px 12px rgba(0,136,255,.2)}
+.cmd-btn.warn-btn{border-color:rgba(255,170,0,.3)}
+.cmd-btn.danger-btn{border-color:rgba(255,101,132,.3)}
+.cmd-icon{font-size:1.3rem}
+.manual-row{display:flex;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 13px;align-items:center}
+.manual-prefix{font-family:var(--mono);font-size:.82rem;color:var(--accent);flex-shrink:0}
+.manual-input{flex:1;background:none;border:none;outline:none;color:var(--text);font-family:var(--mono);font-size:.82rem}
+.manual-send{background:var(--accent);color:#fff;border:none;border-radius:7px;padding:6px 13px;font-family:var(--mono);font-size:.75rem;font-weight:700;cursor:pointer;transition:all .2s;flex-shrink:0}
+.manual-send:hover{background:#5a52e0}
+.disabled-overlay{text-align:center;padding:40px 20px;color:var(--muted)}
+.disabled-icon{font-size:2.5rem;margin-bottom:10px}
+
+/* STATUS BADGE */
+.status-badge{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:.7rem;padding:3px 10px;border-radius:20px}
+.status-enabled{background:rgba(67,233,123,.1);color:var(--accent3)}
+.status-disabled{background:rgba(255,101,132,.1);color:var(--accent2)}
+.status-dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+
+/* EMPTY STATE */
+.empty-state{text-align:center;padding:50px 20px;color:var(--muted)}
+.empty-icon{font-size:2.8rem;margin-bottom:10px}
+
+/* TOAST */
+.toast{position:fixed;bottom:22px;right:22px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:13px 18px;font-size:.85rem;box-shadow:0 8px 32px rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;gap:9px;transform:translateX(120%);transition:transform .3s}
+.toast.show{transform:translateX(0)}
+.toast.success{border-color:rgba(67,233,123,.4)}
+.toast.error{border-color:rgba(255,101,132,.4)}
+.spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,.15);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* INSTALL MODAL */
+.install-icon{width:48px;height:48px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.ios-modal{position:fixed;inset:0;z-index:9000;display:flex;align-items:flex-end;justify-content:center;padding:16px;background:rgba(0,0,0,.7);opacity:0;pointer-events:none;transition:opacity .3s}
+.ios-modal.visible{opacity:1;pointer-events:all}
+.ios-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;width:100%;max-width:400px;animation:slideUp .4s ease}
+.ios-steps{display:grid;gap:16px;margin:20px 0}
+.ios-step{display:flex;align-items:center;gap:14px;font-size:.88rem}
+.ios-step-num{width:28px;height:28px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.8rem;color:#fff;flex-shrink:0}
+.ios-step-icon{font-size:1.4rem;flex-shrink:0}
+@media(max-width:600px){
+  .main-content{padding:18px 14px}
+  .login-card{padding:30px 20px}
+  .type-selector{grid-template-columns:1fr}
+  .device-card{flex-wrap:wrap}
+  .device-actions{width:100%}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- LOGIN -->
+<section id="screen-login" class="screen active">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="logo-icon">🐾</div>
+      <div><h1>CollarApp</h1><span>Panel de usuario</span></div>
+    </div>
+    <div id="login-alert" class="alert"></div>
+    <div id="form-login">
+      <div class="form-group"><label>Usuario</label><input type="text" id="login-user" placeholder="mi_usuario" autocomplete="username" /></div>
+      <div class="form-group"><label>Contraseña</label><input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" /></div>
+      <button class="btn btn-primary" onclick="doLogin()">Iniciar Sesión</button>
+      <button class="btn btn-secondary btn-install" style="width:100%;margin-top:10px;display:none">📲 Instalar app</button>
+      <p class="login-switch">¿No tenés cuenta? <a onclick="showReg()">Registrate</a> · <a onclick="showForgot()">Olvidé mi contraseña</a></p>
+    </div>
+
+    <!-- REGISTRO -->
+    <div id="form-reg" style="display:none">
+      <div class="form-group"><label>Usuario</label><input type="text" id="reg-user" placeholder="mi_usuario" /></div>
+      <div class="form-group"><label>Email</label><input type="email" id="reg-email" placeholder="correo@ejemplo.com" /></div>
+      <div class="form-group"><label>Confirmar email</label><input type="email" id="reg-email2" placeholder="correo@ejemplo.com" /></div>
+      <div class="form-group"><label>Contraseña</label><input type="password" id="reg-pass" placeholder="Mín. 8 caracteres, 1 mayúscula, 1 número" /></div>
+      <div class="form-group"><label>Confirmar contraseña</label><input type="password" id="reg-pass2" placeholder="Repetí la contraseña" /></div>
+      <div style="font-size:.74rem;color:var(--muted);margin-bottom:14px;font-family:var(--mono)">Mín. 8 caracteres · 1 mayúscula · 1 número</div>
+      <button class="btn btn-primary" onclick="doRegister()">Crear Cuenta</button>
+      <button class="btn btn-secondary btn-install" style="width:100%;margin-top:10px;display:none">📲 Instalar app</button>
+      <p class="login-switch">¿Ya tenés cuenta? <a onclick="showLogin()">Iniciá sesión</a></p>
+    </div>
+
+    <!-- RECUPERAR CONTRASEÑA — paso 1: email -->
+    <div id="form-forgot" style="display:none">
+      <div class="form-group"><label>Tu email</label><input type="email" id="forgot-email" placeholder="correo@ejemplo.com" /></div>
+      <button class="btn btn-primary" onclick="doForgot()">Enviar código</button>
+      <p class="login-switch"><a onclick="showLogin()">← Volver al login</a></p>
+    </div>
+
+    <!-- RECUPERAR CONTRASEÑA — paso 2: código + nueva contraseña -->
+    <div id="form-reset" style="display:none">
+      <p style="font-size:.82rem;color:var(--muted);margin-bottom:16px;font-family:var(--mono)">Revisá tu email. Ingresá el código de 6 dígitos que te enviamos.</p>
+      <div class="form-group"><label>Código de 6 dígitos</label><input type="text" id="reset-code" placeholder="123456" maxlength="6" style="letter-spacing:.2em;text-align:center;font-size:1.2rem" /></div>
+      <div class="form-group"><label>Nueva contraseña</label><input type="password" id="reset-pass" placeholder="Mín. 8 caracteres, 1 mayúscula, 1 número" /></div>
+      <div class="form-group"><label>Confirmar nueva contraseña</label><input type="password" id="reset-pass2" placeholder="Repetí la contraseña" /></div>
+      <button class="btn btn-primary" onclick="doReset()">Cambiar contraseña</button>
+      <p class="login-switch"><a onclick="showForgot()">← Reenviar código</a></p>
+    </div>
+  </div>
+</section>
+
+<!-- MAIN -->
+<section id="screen-main" class="screen">
+  <header class="header">
+    <div class="header-logo"><div class="dot">🐾</div>CollarApp</div>
+    <div class="header-right">
+      <span class="master-badge" id="master-badge">🔗 sin asignar</span>
+      <span class="user-badge" id="header-user">—</span>
+      <button class="btn btn-secondary btn-sm" onclick="logout()">Salir</button>
+    </div>
+  </header>
+  <main class="main-content">
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('account',this)">👤 Mi Cuenta</button>
+      <button class="tab" onclick="switchTab('devices',this)">📋 Dispositivos</button>
+      <button class="tab" onclick="switchTab('control',this)">🎮 Control</button>
+    </div>
+
+    <!-- TAB: CUENTA -->
+    <div id="tab-account">
+      <div class="page-header"><h2 class="page-title">Mi <span>cuenta</span></h2></div>
+      <div class="account-card">
+        <div class="account-section">
+          <div class="section-label">Estado de cuenta</div>
+          <div class="master-status">
+            <div class="master-dot" id="master-dot"></div>
+            <div>
+              <div style="font-weight:700;font-size:.9rem" id="master-status-text">Sin cuenta maestra asignada</div>
+              <div style="font-size:.76rem;color:var(--muted);margin-top:2px">Tu cuenta debe ser habilitada por la empresa para poder dar órdenes</div>
+            </div>
+          </div>
+        </div>
+        <div class="account-section">
+          <div class="section-label">Código de vinculación</div>
+          <p style="font-size:.8rem;color:var(--muted);margin-bottom:10px">Entregá este código a la empresa para que vincule tu cuenta.</p>
+          <div class="code-box">
+            <span class="code-value" id="link-code">——</span>
+            <button class="btn btn-secondary btn-sm" onclick="copyCode('link')">Copiar</button>
+          </div>
+        </div>
+        <div class="account-section">
+          <div class="section-label">Código de desvinculación</div>
+          <p style="font-size:.8rem;color:var(--muted);margin-bottom:10px">Usá este código si querés que la empresa te desvincule.</p>
+          <div class="code-box">
+            <span class="code-value" id="unlink-code">——</span>
+            <button class="btn btn-secondary btn-sm" onclick="copyCode('unlink')">Copiar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+      </div>
+    </div>
+
+    <!-- TAB: DISPOSITIVOS -->
+    <div id="tab-devices" style="display:none">
+      <div class="page-header">
+        <h2 class="page-title">Mis <span>dispositivos</span></h2>
+        <button class="btn btn-secondary btn-sm" onclick="loadDevices()">↻</button>
+      </div>
+
+      <!-- Lista -->
+      <div id="device-list" class="device-grid" style="margin-bottom:20px">
+        <div class="empty-state"><div class="spinner"></div></div>
+      </div>
+
+      <!-- Agregar nuevo -->
+      <div id="step-type">
+        <div style="font-family:var(--mono);font-size:.7rem;color:var(--accent);text-transform:uppercase;letter-spacing:.12em;margin-bottom:14px">// Agregar nuevo dispositivo</div>
+        <div class="type-selector">
+          <div class="type-card" id="card-collar" onclick="selectType('collar')">
+            <div class="type-icon">🐕</div>
+            <div class="type-name">Collar inteligente</div>
+            <div class="type-desc">Vibración, sonido y alertas</div>
+          </div>
+          <div class="type-card" id="card-camara" onclick="selectType('camara')">
+            <div class="type-icon">📷</div>
+            <div class="type-name">Cámara</div>
+            <div class="type-desc">Live, fotos y control remoto</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="step-form" style="display:none">
+        <div class="config-form">
+          <!-- Identificación -->
+          <div class="form-section">
+            <div class="form-section-title">01 — Identificación</div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label id="name-label">Nombre *</label>
+                <input type="text" id="cfg-name" placeholder="Ej: Max, Luna, Entrada..." oninput="autoFields(this.value)" />
+              </div>
+              <div class="form-group">
+                <label id="sub-label">Categoría</label>
+                <select id="cfg-sub" onchange="autoFields(document.getElementById('cfg-name').value)"></select>
+              </div>
+            </div>
+            <input type="hidden" id="cfg-id" /><input type="hidden" id="cfg-topic" />
+            <div class="preview-box" id="cfg-preview"></div>
+          </div>
+
+          <!-- Collar -->
+          <div id="section-collar" style="display:none">
+            <div class="form-section">
+              <div class="form-section-title">02 — Alertas</div>
+              <div class="toggle-row"><div><div class="toggle-label">🔊 Alerta sonora</div><div class="toggle-desc">El collar emitirá un pitido</div></div><label class="toggle"><input type="checkbox" id="cfg-sound" checked /><span class="toggle-slider"></span></label></div>
+              <div class="toggle-row"><div><div class="toggle-label">📳 Vibración</div><div class="toggle-desc">El collar vibrará al recibir una orden</div></div><label class="toggle"><input type="checkbox" id="cfg-vib" checked /><span class="toggle-slider"></span></label></div>
+              <div class="toggle-row"><div><div class="toggle-label">⚡ Intensidad</div><div class="toggle-desc">1 = Suave &nbsp; 3 = Fuerte</div></div><div class="range-wrapper" style="width:200px"><input type="range" id="cfg-level" min="1" max="3" value="2" oninput="document.getElementById('level-val').textContent=this.value+'/3'" /><span class="range-value" id="level-val">2/3</span></div></div>
+            </div>
+            <div class="form-section">
+              <div class="form-section-title">03 — Zona segura GPS</div>
+              <div class="form-grid">
+                <div class="form-group"><label>Latitud</label><input type="number" id="cfg-lat" placeholder="-34.6037" step="0.0001" /></div>
+                <div class="form-group"><label>Longitud</label><input type="number" id="cfg-lng" placeholder="-58.3816" step="0.0001" /></div>
+                <div class="form-group"><label>Radio de zona segura</label><div class="range-wrapper"><input type="range" id="cfg-radius" min="50" max="5000" value="500" step="50" oninput="document.getElementById('radius-val').textContent=this.value+'m'" /><span class="range-value" id="radius-val">500m</span></div></div>
+              </div>
+            </div>
+            <div class="form-section">
+              <div class="form-section-title">04 — Comandos personalizados</div>
+              <div id="cmd-tags" class="cmd-tags"></div>
+              <div class="cmd-row"><div class="form-group" style="flex:1;margin:0"><input type="text" id="cmd-input" placeholder="Ej: VOLVER, SENTARSE..." /></div><button class="btn btn-secondary btn-sm" onclick="addCmd()">+ Agregar</button></div>
+            </div>
+          </div>
+
+          <!-- Cámara -->
+          <div id="section-camara" style="display:none">
+            <div class="form-section">
+              <div class="form-section-title">02 — Conexión</div>
+              <div class="form-grid">
+                <div class="form-group"><label>URL de stream (opcional)</label><input type="text" id="cfg-stream" placeholder="http://192.168.1.100/stream" /></div>
+                <div class="form-group"><label>Usuario de la cámara</label><input type="text" id="cfg-cam-user" placeholder="admin (opcional)" /></div>
+                <div class="form-group"><label>Contraseña</label><input type="password" id="cfg-cam-pass" placeholder="(opcional)" /></div>
+              </div>
+            </div>
+            <div class="form-section">
+              <div class="form-section-title">03 — Funciones</div>
+              <div class="toggle-row"><div><div class="toggle-label">📹 Ver en vivo</div><div class="toggle-desc">Stream de video en tiempo real</div></div><label class="toggle"><input type="checkbox" id="cfg-live" checked /><span class="toggle-slider"></span></label></div>
+              <div class="toggle-row"><div><div class="toggle-label">📸 Tomar foto</div><div class="toggle-desc">Capturar imagen desde la app</div></div><label class="toggle"><input type="checkbox" id="cfg-snap" checked /><span class="toggle-slider"></span></label></div>
+              <div class="toggle-row"><div><div class="toggle-label">🔴 Encender / apagar</div><div class="toggle-desc">Control de encendido remoto</div></div><label class="toggle"><input type="checkbox" id="cfg-power" checked /><span class="toggle-slider"></span></label></div>
+              <div class="toggle-row"><div><div class="toggle-label">🔔 Detectar movimiento</div><div class="toggle-desc">Notificar al detectar movimiento</div></div><label class="toggle"><input type="checkbox" id="cfg-motion" /><span class="toggle-slider"></span></label></div>
+            </div>
+            <div class="form-section">
+              <div class="form-section-title">04 — Calidad</div>
+              <div class="form-grid">
+                <div class="form-group"><label>Resolución</label><select id="cfg-res"><option value="low">Baja (360p)</option><option value="medium" selected>Media (720p)</option><option value="high">Alta (1080p)</option></select></div>
+                <div class="form-group"><label>Orientación</label><select id="cfg-orient"><option value="normal">Normal</option><option value="flip_h">Espejo horizontal</option><option value="flip_v">Espejo vertical</option><option value="rotate_180">Girada 180°</option></select></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Notas -->
+          <div class="form-section">
+            <div class="form-section-title">— Notas</div>
+            <div class="form-group"><textarea id="cfg-notes" placeholder="Notas sobre este dispositivo..."></textarea></div>
+          </div>
+
+          <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+            <button class="btn btn-secondary" onclick="cancelForm()">✕ Cancelar</button>
+            <button class="btn btn-primary" style="width:auto" onclick="saveDevice()">💾 Guardar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: CONTROL -->
+    <div id="tab-control" style="display:none">
+      <div class="page-header"><h2 class="page-title">Panel de <span>control</span></h2></div>
+      <div id="control-content"></div>
+    </div>
+
+  </main>
+</section>
+
+<!-- MODAL INSTALACIÓN -->
+<div class="ios-modal" id="ios-modal">
+  <div class="ios-card">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
+      <div class="install-icon">🐾</div>
+      <div><div style="font-weight:800;font-size:1rem">Instalá CollarApp</div><div id="ios-modal-sub" style="font-size:.76rem;color:var(--muted);font-family:var(--mono)"></div></div>
+    </div>
+    <div class="ios-steps" id="ios-modal-steps"></div>
+    <button class="btn btn-secondary" style="width:100%;margin-top:16px" onclick="closeIosModal()">Entendido</button>
+  </div>
+</div>
+
+</div><!-- end #app -->
+<div class="toast" id="toast"></div>
+
+<script>
+const API = ((window.APP_CONFIG && window.APP_CONFIG.BACKEND_URL) || 'http://localhost:3001') + '/api';
+let token = localStorage.getItem('app1_token') || '';
+let me    = JSON.parse(localStorage.getItem('app1_me') || 'null');
+let devices = [];
+let autoCmds = [];
+let editingId = null;
+let currentType = null;
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  if (token && me) showMain();
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+  checkInstallPrompt();
+});
+
+// ── AUTH ──────────────────────────────────────────────────────────────────────
+const FORMS = ['form-login','form-reg','form-forgot','form-reset'];
+function showOnly(id) { FORMS.forEach(f => document.getElementById(f).style.display = f===id?'':'none'); clearAlert(); }
+function showLogin()  { showOnly('form-login'); }
+function showReg()    { showOnly('form-reg'); }
+function showForgot() { showOnly('form-forgot'); }
+function showReset()  { showOnly('form-reset'); }
+function clearAlert() { document.getElementById('login-alert').className='alert'; }
+function setAlert(msg,type){ const el=document.getElementById('login-alert'); el.textContent=msg; el.className=`alert ${type}`; }
+
+function validatePw(pw) {
+  if (pw.length < 8)         return 'Mínimo 8 caracteres';
+  if (!/[A-Z]/.test(pw))     return 'Al menos una letra mayúscula';
+  if (!/[0-9]/.test(pw))     return 'Al menos un número';
+  return null;
+}
+
+async function doLogin() {
+  const u = document.getElementById('login-user').value.trim();
+  const p = document.getElementById('login-pass').value;
+  if (!u||!p) return setAlert('Completá todos los campos','error');
+  try {
+    const res  = await fetch(`${API}/user/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
+    const data = await res.json();
+    if (!res.ok) return setAlert(data.error,'error');
+    token = data.token; me = data;
+    localStorage.setItem('app1_token', token);
+    localStorage.setItem('app1_me', JSON.stringify(me));
+    showMain();
+  } catch { setAlert('No se puede conectar al backend','error'); }
+}
+
+async function doRegister() {
+  const u  = document.getElementById('reg-user').value.trim();
+  const e  = document.getElementById('reg-email').value.trim();
+  const e2 = document.getElementById('reg-email2').value.trim();
+  const p  = document.getElementById('reg-pass').value;
+  const p2 = document.getElementById('reg-pass2').value;
+  if (!u||!e||!e2||!p||!p2) return setAlert('Completá todos los campos','error');
+  if (e !== e2)               return setAlert('Los emails no coinciden','error');
+  const pwErr = validatePw(p);
+  if (pwErr)                  return setAlert(pwErr,'error');
+  if (p !== p2)               return setAlert('Las contraseñas no coinciden','error');
+  try {
+    const res  = await fetch(`${API}/user/register`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,email:e,password:p})});
+    const data = await res.json();
+    if (!res.ok) return setAlert(data.error,'error');
+    setAlert('¡Cuenta creada! Ahora iniciá sesión.','success');
+    setTimeout(showLogin, 1800);
+  } catch { setAlert('No se puede conectar al backend','error'); }
+}
+
+let forgotEmail = '';
+async function doForgot() {
+  const e = document.getElementById('forgot-email').value.trim();
+  if (!e) return setAlert('Ingresá tu email','error');
+  try {
+    await fetch(`${API}/user/forgot`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:e})});
+    forgotEmail = e;
+    setAlert('Si el email existe, vas a recibir un código en minutos.','success');
+    setTimeout(showReset, 2000);
+  } catch { setAlert('No se puede conectar al backend','error'); }
+}
+
+async function doReset() {
+  const code = document.getElementById('reset-code').value.trim();
+  const p    = document.getElementById('reset-pass').value;
+  const p2   = document.getElementById('reset-pass2').value;
+  if (!code||!p||!p2) return setAlert('Completá todos los campos','error');
+  const pwErr = validatePw(p);
+  if (pwErr)          return setAlert(pwErr,'error');
+  if (p !== p2)       return setAlert('Las contraseñas no coinciden','error');
+  try {
+    const res  = await fetch(`${API}/user/reset`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:forgotEmail,code,new_password:p})});
+    const data = await res.json();
+    if (!res.ok) return setAlert(data.error,'error');
+    setAlert('¡Contraseña cambiada! Iniciá sesión.','success');
+    setTimeout(showLogin, 1800);
+  } catch { setAlert('No se puede conectar al backend','error'); }
+}
+
+async function doChangePassword() {
+  const cur = document.getElementById('cp-current').value;
+  const np  = document.getElementById('cp-new').value;
+  const np2 = document.getElementById('cp-new2').value;
+  if (!cur||!np||!np2) return showToast('Completá todos los campos','error');
+  const pwErr = validatePw(np);
+  if (pwErr)           return showToast(pwErr,'error');
+  if (np !== np2)      return showToast('Las contraseñas no coinciden','error');
+  try {
+    const res  = await fetch(`${API}/user/change-password`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({current_password:cur,new_password:np})});
+    const data = await res.json();
+    if (!res.ok) return showToast(data.error,'error');
+    showToast('¡Contraseña actualizada! ✅','success');
+    document.getElementById('cp-current').value = '';
+    document.getElementById('cp-new').value     = '';
+    document.getElementById('cp-new2').value    = '';
+  } catch { showToast('Error al cambiar contraseña','error'); }
+}
+
+function logout() {
+  token=''; me=null;
+  localStorage.removeItem('app1_token'); localStorage.removeItem('app1_me');
+  document.getElementById('screen-main').classList.remove('active');
+  document.getElementById('screen-login').classList.add('active');
+}
+
+// ── MAIN ──────────────────────────────────────────────────────────────────────
+function showMain() {
+  document.getElementById('screen-login').classList.remove('active');
+  document.getElementById('screen-main').classList.add('active');
+  document.getElementById('header-user').textContent = me.username;
+  refreshMe();
+  loadDevices();
+}
+
+async function refreshMe() {
+  try {
+    const res  = await fetch(`${API}/user/me`,{headers:{Authorization:`Bearer ${token}`}});
+    if (!res.ok) return;
+    const data = await res.json();
+    me = { ...me, ...data };
+    localStorage.setItem('app1_me', JSON.stringify(me));
+    updateAccountUI();
+  } catch {}
+}
+
+function updateAccountUI() {
+  document.getElementById('link-code').textContent   = me.link_code   || '——';
+  document.getElementById('unlink-code').textContent = me.unlink_code || '——';
+  const dot     = document.getElementById('master-dot');
+  const txt     = document.getElementById('master-status-text');
+  const badge   = document.getElementById('master-badge');
+  if (me.master_name) {
+    dot.classList.add('linked');
+    txt.textContent = `Vinculada a: ${me.master_name}`;
+    txt.style.color = 'var(--accent3)';
+    badge.textContent = `🔗 ${me.master_name}`;
+    badge.style.display = '';
+  } else {
+    dot.classList.remove('linked');
+    txt.textContent = 'Sin cuenta maestra asignada';
+    txt.style.color = '';
+    badge.style.display = 'none';
+  }
+}
+
+function copyCode(type) {
+  const val = type==='link' ? me.link_code : me.unlink_code;
+  navigator.clipboard.writeText(val).then(()=>showToast('Código copiado','success'));
+}
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  ['account','devices','control'].forEach(t=>{
+    document.getElementById(`tab-${t}`).style.display = t===name?'':'none';
+  });
+  if (name==='account') refreshMe();
+  if (name==='devices') loadDevices();
+  if (name==='control') renderControl();
+}
+
+// ── DISPOSITIVOS ──────────────────────────────────────────────────────────────
+async function loadDevices() {
+  document.getElementById('device-list').innerHTML='<div class="empty-state"><div class="spinner"></div></div>';
+  try {
+    const res = await fetch(`${API}/devices`,{headers:{Authorization:`Bearer ${token}`}});
+    devices   = await res.json();
+    renderDevices();
+  } catch {
+    document.getElementById('device-list').innerHTML='<div class="empty-state"><div class="empty-icon">⚠️</div><p>Error conectando al backend</p></div>';
+  }
+}
+
+function renderDevices() {
+  const list = document.getElementById('device-list');
+  if (!devices.length) {
+    list.innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><h3>Sin dispositivos</h3><p>Agregá tu primer collar o cámara abajo</p></div>';
+    return;
+  }
+  list.innerHTML = devices.map(d=>{
+    const isC = d.device_type==='collar';
+    const meta = isC
+      ? `🔊${d.alert_sound?'ON':'OFF'} · 📳${d.alert_vibration?'ON':'OFF'} · ⚡${d.alert_level}/3`
+      : `📹${d.cam_live?'Live':'—'} · 📸${d.cam_snap?'Foto':'—'}`;
+    return `<div class="device-card">
+      <div class="device-icon ${d.device_type}">${isC?'🐕':'📷'}</div>
+      <div class="device-info">
+        <span class="device-badge badge-${d.device_type}">${isC?'COLLAR':'CÁMARA'}</span>
+        <div class="device-name">${d.device_name}</div>
+        <div class="device-meta">${meta}</div>
+      </div>
+      <div class="device-actions">
+        <button class="btn btn-secondary btn-sm" onclick="editDevice('${d.id}')">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteDevice('${d.id}')">🗑️</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function deleteDevice(id) {
+  if (!confirm('¿Eliminar este dispositivo?')) return;
+  await fetch(`${API}/devices/${id}`,{method:'DELETE',headers:{Authorization:`Bearer ${token}`}});
+  showToast('Eliminado','success'); loadDevices();
+}
+
+function editDevice(id) {
+  const d = devices.find(x=>x.id===id); if (!d) return;
+  editingId = id;
+  selectType(d.device_type);
+  document.getElementById('cfg-name').value  = d.device_name;
+  document.getElementById('cfg-id').value    = d.device_id;
+  document.getElementById('cfg-topic').value = d.mqtt_topic;
+  document.getElementById('cfg-notes').value = d.notes||'';
+  document.getElementById('cfg-sub').value   = d.device_subtype||'';
+  document.getElementById('cfg-preview').style.display='';
+  document.getElementById('cfg-preview').innerHTML=`✅ Editando dispositivo`;
+  if (d.device_type==='collar') {
+    document.getElementById('cfg-sound').checked = !!d.alert_sound;
+    document.getElementById('cfg-vib').checked   = !!d.alert_vibration;
+    document.getElementById('cfg-level').value   = d.alert_level||2;
+    document.getElementById('level-val').textContent = (d.alert_level||2)+'/3';
+    document.getElementById('cfg-lat').value     = d.safe_zone_lat||'';
+    document.getElementById('cfg-lng').value     = d.safe_zone_lng||'';
+    autoCmds = Array.isArray(d.auto_commands)?[...d.auto_commands]:[];
+    renderCmds();
+  } else {
+    document.getElementById('cfg-stream').value    = d.stream_url||'';
+    document.getElementById('cfg-cam-user').value  = d.cam_user||'';
+    document.getElementById('cfg-cam-pass').value  = d.cam_pass||'';
+    document.getElementById('cfg-live').checked    = !!d.cam_live;
+    document.getElementById('cfg-snap').checked    = !!d.cam_snap;
+    document.getElementById('cfg-power').checked   = !!d.cam_power;
+    document.getElementById('cfg-motion').checked  = !!d.cam_motion;
+    document.getElementById('cfg-res').value       = d.cam_res||'medium';
+    document.getElementById('cfg-orient').value    = d.cam_orient||'normal';
+  }
+}
+
+// ── TIPO ──────────────────────────────────────────────────────────────────────
+function selectType(type) {
+  currentType = type;
+  document.getElementById('step-type').style.display='none';
+  document.getElementById('step-form').style.display='';
+  document.getElementById('section-collar').style.display = type==='collar'?'':'none';
+  document.getElementById('section-camara').style.display = type==='camara'?'':'none';
+  document.getElementById('card-collar').classList.toggle('selected',type==='collar');
+  document.getElementById('card-camara').classList.toggle('selected',type==='camara');
+  if (type==='collar') {
+    document.getElementById('name-label').textContent='Nombre de la mascota / persona *';
+    document.getElementById('sub-label').textContent='Tipo';
+    document.getElementById('cfg-sub').innerHTML='<option value="perro">🐕 Perro</option><option value="gato">🐈 Gato</option><option value="persona">👤 Persona</option><option value="otro">📦 Otro</option>';
+  } else {
+    document.getElementById('name-label').textContent='Nombre de la cámara *';
+    document.getElementById('sub-label').textContent='Ubicación';
+    document.getElementById('cfg-sub').innerHTML='<option value="entrada">🚪 Entrada</option><option value="jardin">🌿 Jardín</option><option value="garage">🚗 Garage</option><option value="interior">🏠 Interior</option><option value="exterior">🌐 Exterior</option><option value="otro">📦 Otro</option>';
+  }
+}
+
+function autoFields(nombre) {
+  if (!nombre.trim()) { document.getElementById('cfg-preview').style.display='none'; return; }
+  if (editingId) return;
+  const limpio = nombre.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,'');
+  const rand  = Math.floor(Math.random()*900+100);
+  const tipo  = currentType==='collar'?'collar':'cam';
+  const id    = `${tipo}_${limpio}_${rand}`;
+  const topic = `${tipo}/${limpio}/comandos`;
+  document.getElementById('cfg-id').value    = id;
+  document.getElementById('cfg-topic').value = topic;
+  const p = document.getElementById('cfg-preview');
+  p.style.display=''; p.innerHTML=`✅ Dispositivo configurado correctamente`;
+}
+
+async function saveDevice() {
+  const name  = document.getElementById('cfg-name').value.trim();
+  const id    = document.getElementById('cfg-id').value.trim();
+  const topic = document.getElementById('cfg-topic').value.trim();
+  if (!name) return showToast('Escribí el nombre del dispositivo','error');
+  if (!id||!topic) return showToast('El nombre genera el canal automáticamente','error');
+  let body = { device_name:name, device_id:id, device_type:currentType, device_subtype:document.getElementById('cfg-sub').value, mqtt_topic:topic, notes:document.getElementById('cfg-notes').value, is_active:1 };
+  if (currentType==='collar') {
+    body = {...body, alert_sound:document.getElementById('cfg-sound').checked?1:0, alert_vibration:document.getElementById('cfg-vib').checked?1:0, alert_level:parseInt(document.getElementById('cfg-level').value), safe_zone_lat:parseFloat(document.getElementById('cfg-lat').value)||null, safe_zone_lng:parseFloat(document.getElementById('cfg-lng').value)||null, auto_commands:autoCmds };
+  } else {
+    body = {...body, stream_url:document.getElementById('cfg-stream').value.trim(), cam_user:document.getElementById('cfg-cam-user').value.trim(), cam_pass:document.getElementById('cfg-cam-pass').value, cam_live:document.getElementById('cfg-live').checked?1:0, cam_snap:document.getElementById('cfg-snap').checked?1:0, cam_power:document.getElementById('cfg-power').checked?1:0, cam_motion:document.getElementById('cfg-motion').checked?1:0, cam_res:document.getElementById('cfg-res').value, cam_orient:document.getElementById('cfg-orient').value };
+  }
+  try {
+    const url    = editingId ? `${API}/devices/${editingId}` : `${API}/devices`;
+    const method = editingId ? 'PUT' : 'POST';
+    const res    = await fetch(url,{method,headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify(body)});
+    const data   = await res.json();
+    if (!res.ok) return showToast(data.error,'error');
+    showToast(editingId?'Dispositivo actualizado ✅':'Dispositivo guardado ✅','success');
+    cancelForm(); loadDevices();
+  } catch { showToast('Error al guardar','error'); }
+}
+
+function cancelForm() {
+  editingId=null; currentType=null; autoCmds=[];
+  document.getElementById('step-type').style.display='';
+  document.getElementById('step-form').style.display='none';
+  document.getElementById('card-collar').classList.remove('selected');
+  document.getElementById('card-camara').classList.remove('selected');
+  ['cfg-name','cfg-id','cfg-topic','cfg-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('cfg-preview').style.display='none';
+  renderCmds();
+}
+
+function addCmd() {
+  const v = document.getElementById('cmd-input').value.trim().toUpperCase();
+  if (!v||autoCmds.includes(v)) return;
+  autoCmds.push(v); document.getElementById('cmd-input').value=''; renderCmds();
+}
+function removeCmd(c) { autoCmds=autoCmds.filter(x=>x!==c); renderCmds(); }
+function renderCmds() {
+  document.getElementById('cmd-tags').innerHTML = autoCmds.map(c=>`<span class="cmd-tag">${c}<button onclick="removeCmd('${c}')">×</button></span>`).join('');
+}
+document.addEventListener('keypress', e=>{ if(e.target.id==='cmd-input'&&e.key==='Enter') addCmd(); });
+
+// ── CONTROL ───────────────────────────────────────────────────────────────────
+function renderControl() {
+  const el = document.getElementById('control-content');
+  if (!me?.enabled) {
+    el.innerHTML=`<div class="disabled-overlay"><div class="disabled-icon">🔒</div><h3 style="margin-bottom:8px">Cuenta no habilitada</h3><p style="font-size:.88rem;color:var(--muted)">Tu cuenta todavía no fue vinculada a una cuenta maestra.<br>Compartí tu código de vinculación con la empresa.</p></div>`;
+    return;
+  }
+  if (!devices.length) {
+    el.innerHTML=`<div class="empty-state"><div class="empty-icon">📭</div><h3>Sin dispositivos</h3><p>Primero agregá dispositivos en la pestaña "Dispositivos"</p></div>`;
+    return;
+  }
+  el.innerHTML = `<div class="control-grid">${devices.map(d=>renderControlCard(d)).join('')}</div>`;
+}
+
+function renderControlCard(d) {
+  const isC = d.device_type==='collar';
+  const cmds = isC ? `
+    <button class="cmd-btn" onclick="sendCmd('${d.id}','BEEP')"><span class="cmd-icon">🔊</span>Sonido</button>
+    <button class="cmd-btn" onclick="sendCmd('${d.id}','VIBRAR')"><span class="cmd-icon">📳</span>Vibrar</button>
+    <button class="cmd-btn" onclick="sendCmd('${d.id}','ALERTA')"><span class="cmd-icon">⚡</span>Alerta</button>
+    <button class="cmd-btn warn-btn" onclick="sendCmd('${d.id}','VOLVER')"><span class="cmd-icon">🏠</span>Volver</button>
+    <button class="cmd-btn warn-btn" onclick="sendCmd('${d.id}','QUIETO')"><span class="cmd-icon">🛑</span>Quieto</button>
+    <button class="cmd-btn" onclick="sendCmd('${d.id}','STATUS')"><span class="cmd-icon">📊</span>Estado</button>
+    <button class="cmd-btn danger-btn" onclick="sendCmd('${d.id}','EMERGENCIA')"><span class="cmd-icon">🚨</span>Emergencia</button>
+    ${(d.auto_commands||[]).map(c=>`<button class="cmd-btn" onclick="sendCmd('${d.id}','${c}')"><span class="cmd-icon">⚡</span>${c}</button>`).join('')}
+  ` : `
+    ${d.cam_live?`<button class="cmd-btn cam-btn" onclick="sendCmd('${d.id}','STREAM_ON')"><span class="cmd-icon">▶️</span>Live</button>`:''}
+    ${d.cam_snap?`<button class="cmd-btn cam-btn" onclick="sendCmd('${d.id}','FOTO')"><span class="cmd-icon">📸</span>Foto</button>`:''}
+    ${d.cam_power?`<button class="cmd-btn" onclick="sendCmd('${d.id}','ENCENDER')"><span class="cmd-icon">🟢</span>Encender</button>`:''}
+    ${d.cam_power?`<button class="cmd-btn danger-btn" onclick="sendCmd('${d.id}','APAGAR')"><span class="cmd-icon">🔴</span>Apagar</button>`:''}
+    <button class="cmd-btn" onclick="sendCmd('${d.id}','STATUS')"><span class="cmd-icon">📊</span>Estado</button>
+  `;
+  return `<div class="control-card">
+    <div class="control-header">
+      <div class="control-icon ${isC?'collar':'camara'} device-icon">${isC?'🐕':'📷'}</div>
+      <div><div style="font-weight:700">${d.device_name}</div><div style="font-size:.72rem;color:var(--muted);font-family:var(--mono)">${d.device_subtype||d.device_type}</div></div>
+    </div>
+    <div class="control-body">
+      <div class="cmd-grid">${cmds}</div>
+      <div class="manual-row">
+        <span class="manual-prefix">$</span>
+        <input class="manual-input" id="manual-${d.id}" placeholder="Comando manual..." onkeypress="if(event.key==='Enter')sendManual('${d.id}')" />
+        <button class="manual-send" onclick="sendManual('${d.id}')">ENVIAR</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function sendCmd(deviceId, command) {
+  if (!me?.enabled) return showToast('Tu cuenta no está habilitada aún','error');
+  // Ocultar aviso anterior de fallo si existe
+  const failBanner = document.getElementById('cmd-fail-banner');
+  if (failBanner) failBanner.style.display = 'none';
+  try {
+    const res  = await fetch(`${API}/commands`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({device_id:deviceId,command,payload:{}})});
+    const data = await res.json();
+    if (res.ok && data.status === 'executed') {
+      showToast(`${command} ejecutado ✅`,'success');
+    } else if (!res.ok || data.status === 'failed') {
+      // Mostrar aviso persistente de fallo
+      showFailBanner(command, data.error || 'El comando no pudo enviarse al dispositivo.');
+    } else {
+      showToast(`${command} enviado`,'success');
+    }
+  } catch { showToast('Error de conexión con el servidor','error'); }
+}
+
+function showFailBanner(command, reason) {
+  let banner = document.getElementById('cmd-fail-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'cmd-fail-banner';
+    banner.style.cssText = 'background:rgba(255,101,132,.12);border:1px solid rgba(255,101,132,.4);border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:12px;animation:slideUp .3s ease';
+    document.getElementById('control-content').prepend(banner);
+  }
+  banner.style.display = 'flex';
+  banner.innerHTML = `
+    <span style="font-size:1.4rem">⚠️</span>
+    <div style="flex:1">
+      <div style="font-weight:700;font-size:.9rem;color:var(--accent2)">Última orden no ejecutada: ${command}</div>
+      <div style="font-size:.78rem;color:var(--muted);margin-top:2px">${reason}</div>
+    </div>
+    <button onclick="this.parentElement.style.display='none'" style="background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;padding:4px">✕</button>`;
+}
+
+function sendManual(deviceId) {
+  const cmd = document.getElementById(`manual-${deviceId}`)?.value.trim().toUpperCase();
+  if (!cmd) return;
+  sendCmd(deviceId, cmd);
+  document.getElementById(`manual-${deviceId}`).value='';
+}
+
+// ── UTILS ─────────────────────────────────────────────────────────────────────
+function showToast(msg,type='success') {
+  const t=document.getElementById('toast');
+  t.textContent=(type==='success'?'✅ ':'❌ ')+msg;
+  t.className=`toast ${type} show`;
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+// ── INSTALL ───────────────────────────────────────────────────────────────────
+let deferredInstall = null;
+const isIOS   = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isInApp = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstall = e;
+});
+
+function checkInstallPrompt() {
+  if (isInApp) return;
+  document.querySelectorAll('.btn-install').forEach(b => {
+    b.style.display = '';
+    b.onclick = handleInstallClick;
+  });
+}
+
+function handleInstallClick() {
+  if (deferredInstall) {
+    deferredInstall.prompt();
+    deferredInstall.userChoice.then(({ outcome }) => {
+      if (outcome === 'accepted')
+        document.querySelectorAll('.btn-install').forEach(b => b.style.display = 'none');
+    });
+  } else if (isIOS) {
+    showInstallModal('iPhone / iPad', [
+      { n:'1', i:'⬆️', t:'Tocá el botón <strong>Compartir</strong> en la barra de Safari' },
+      { n:'2', i:'➕', t:'Seleccioná <strong>"Agregar a pantalla de inicio"</strong>' },
+      { n:'3', i:'✅', t:'Tocá <strong>Agregar</strong> para confirmar' }
+    ]);
+  } else {
+    showInstallModal('Android / Chrome', [
+      { n:'1', i:'⋮',  t:'Tocá los <strong>tres puntitos</strong> arriba a la derecha en Chrome' },
+      { n:'2', i:'➕', t:'Seleccioná <strong>"Agregar a pantalla de inicio"</strong>' },
+      { n:'3', i:'✅', t:'Tocá <strong>Agregar</strong> para confirmar' }
+    ]);
+  }
+}
+
+function showInstallModal(sub, steps) {
+  document.getElementById('ios-modal-sub').textContent = sub;
+  document.getElementById('ios-modal-steps').innerHTML = steps.map(s =>
+    `<div class="ios-step"><span class="ios-step-num">${s.n}</span><span class="ios-step-icon">${s.i}</span><span>${s.t}</span></div>`
+  ).join('');
+  document.getElementById('ios-modal').classList.add('visible');
+}
+
+function showIosModal()  { handleInstallClick(); }
+function closeIosModal() { document.getElementById('ios-modal').classList.remove('visible'); }
+
+window.addEventListener('appinstalled', () => {
+  document.querySelectorAll('.btn-install').forEach(b => b.style.display = 'none');
+  showToast('¡App instalada! 🎉', 'success');
+});
+</script>
+</body>
+</html>
