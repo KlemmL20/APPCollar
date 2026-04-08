@@ -70,7 +70,9 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .tab{flex:1;min-width:fit-content;padding:10px 16px;border-radius:10px;border:none;background:transparent;color:var(--muted);font-family:var(--main);font-size:.86rem;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
 .tab.active{background:var(--accent);color:#fff}
 /\* PAGE HEADER \*/
-.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:12px}
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:0;flex-wrap:wrap;gap:12px}
+#tab-devices > div:nth-child(2) { margin-top: 12px; }
+#tab-control > div:nth-child(2) { margin-top: 12px; }
 .page-title{font-size:1.7rem;font-weight:800;letter-spacing:-.03em;margin:0;padding:0}
 .page-header h2{margin:0;padding:0}
 .page-title span{color:var(--accent)}
